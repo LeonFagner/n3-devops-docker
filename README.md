@@ -33,8 +33,7 @@ Todos esses itens foram implementados.
 | **Docker** | Build, execução e gerenciamento de containers |
 | **Registry local** | Armazenamento da imagem Docker gerada (opcional) |
 
-> ⚠️ Forgejo está hospedado localmente dentro de um container.  
-> Por isso, o repositório **não possui link público**, conforme exigência da atividade (somente soluções auto-hospedadas).
+
 
 ---
 
