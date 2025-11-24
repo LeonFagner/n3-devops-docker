@@ -1,0 +1,96 @@
+version: "3.9"
+
+networks:
+  forgejo-net:
+
+volumes:
+  forgejo-data:
+  postgres-data:
+  runner-data:
+  backend-node-modules:
+
+services:
+  # --- POSTGRES ---
+  db:
+    image: postgres:16
+    container_name: forgejo-db
+    restart: always
+    environment:
+      POSTGRES_USER: "forgejo"
+      POSTGRES_PASSWORD: "forgejo"
+      POSTGRES_DB: "forgejo"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - forgejo-net
+
+  # --- FORGEJO SERVER ---
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:1.21
+    container_name: forgejo
+    depends_on:
+      - db
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      FORGEJO__database__DB_TYPE: "postgres"
+      FORGEJO__database__HOST: "db:5432"
+      FORGEJO__database__NAME: "forgejo"
+      FORGEJO__database__USER: "forgejo"
+      FORGEJO__database__PASSWD: "forgejo"
+      FORGEJO__server__DOMAIN: "localhost"
+      FORGEJO__server__HTTP_PORT: "3000"
+      FORGEJO__server__ROOT_URL: "http://localhost:3000/"
+      FORGEJO__actions__ENABLED: "true"
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - forgejo-data:/data
+    networks:
+      - forgejo-net
+
+  # --- NODE BACKEND ---
+  backend:
+    build: ./backend
+    container_name: backend
+    working_dir: /workspace
+    volumes:
+      - ./backend:/workspace
+      - backend-node-modules:/workspace/node_modules
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: "4000"
+      DB_HOST: "db"
+      DB_USER: "forgejo"
+      DB_PASS: "forgejo"
+      DB_NAME: "forgejo"
+    depends_on:
+      - db
+    command: sh -c "npm install --legacy-peer-deps && npm start"
+    networks:
+      - forgejo-net
+
+  # --- FORGEJO RUNNER ---
+  runner:
+    image: code.forgejo.org/forgejo/runner:3.5.0
+    container_name: forgejo-runner
+    restart: always
+    user: root
+    depends_on:
+      - forgejo
+    volumes:
+      - runner-data:/data
+      # 🔧 dá acesso ao Docker do host
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./daemon.json:/etc/docker/daemon.json 
+    environment:
+      FORGEJO_INSTANCE_URL: "http://forgejo:3000"
+      RUNNER_NAME: "runner-devops"
+      RUNNER_LABELS: "docker"
+      RUNNER_TOKEN: "2cb13313cf5fda8523a024f732d031703874d7e7"
+    networks:
+      - forgejo-net
+    command: >
+      forgejo-runner daemon --config /data/.runner
